@@ -6,6 +6,8 @@ Begin VB.UserControl ctxNineButton
    ClientTop       =   0
    ClientWidth     =   4044
    ClipBehavior    =   0  'None
+   DefaultCancel   =   -1  'True
+   KeyPreview      =   -1  'True
    ScaleHeight     =   105
    ScaleMode       =   3  'Pixel
    ScaleWidth      =   337
@@ -35,9 +37,23 @@ Private Const STR_MODULE_NAME As String = "ctxNineButton"
 '=========================================================================
 
 Event Click()
+Attribute Click.VB_UserMemId = -600
 Event DblClick()
+Attribute DblClick.VB_UserMemId = -601
 Event ContextMenu()
-Event OwnerDraw(ByVal hGraphics As Long, ByVal hFont As Long, ByVal ButtonState As UcsNineButtonStateEnum, ClientLeft As Long, ClientTop As Long, ClientWidth As Long, ClientHeight As Long)
+Event OwnerDraw(ByVal hGraphics As Long, ByVal hFont As Long, ByVal ButtonState As UcsNineButtonStateEnum, ClientLeft As Long, ClientTop As Long, ClientWidth As Long, ClientHeight As Long, Caption As String, ByVal hPicture As Long)
+Event RegisterCancelMode(oCtl As Object, Handled As Boolean)
+Event KeyDown(KeyCode As Integer, Shift As Integer)
+Attribute KeyDown.VB_UserMemId = -602
+Event KeyPress(KeyAscii As Integer)
+Attribute KeyPress.VB_UserMemId = -604
+Event KeyUp(KeyCode As Integer, Shift As Integer)
+Event MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+Attribute MouseDown.VB_UserMemId = -605
+Event MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
+Attribute MouseMove.VB_UserMemId = -606
+Event MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
+Attribute MouseUp.VB_UserMemId = -607
 
 '=========================================================================
 ' Public enums
@@ -111,65 +127,75 @@ End Enum
 
 '--- for GdipCreateBitmapFromScan0
 Private Const PixelFormat32bppARGB          As Long = &H26200A
+Private Const PixelFormat32bppPARGB         As Long = &HE200B
 '--- for GdipDrawImageXxx
 Private Const UnitPixel                     As Long = 2
 Private Const UnitPoint                     As Long = 3
-'--- for RedrawWindow
-Private Const RDW_INVALIDATE                As Long = &H1
-Private Const RDW_ERASE                     As Long = &H4
-Private Const RDW_ALLCHILDREN               As Long = &H80
-Private Const RDW_UPDATENOW                 As Long = &H100
-Private Const RDW_FRAME                     As Long = &H400
 '--- for CryptStringToBinary
 Private Const CRYPT_STRING_BASE64           As Long = 1
+'--- for GdipSetTextRenderingHint
 Private Const TextRenderingHintAntiAlias    As Long = 4
+Private Const TextRenderingHintClearTypeGridFit As Long = 5
+'--- for PeekMessage
+Private Const PM_REMOVE                     As Long = 1
+'--- Windows Messages
+Private Const WM_PAINT                      As Long = &HF
+'--- DIB Section constants
+Private Const DIB_RGB_COLORS                As Long = 0 '  color table in RGBs
 
 Private Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (lpDst As Any, lpSrc As Any, ByVal ByteLength As Long)
 Private Declare Function OleTranslateColor Lib "oleaut32" (ByVal lOleColor As Long, ByVal lHPalette As Long, ByVal lColorRef As Long) As Long
+Private Declare Function PeekMessage Lib "user32" Alias "PeekMessageA" (lpMsg As APIMSG, ByVal hWnd As Long, ByVal wMsgFilterMin As Long, ByVal wMsgFilterMax As Long, ByVal wRemoveMsg As Long) As Long
+Private Declare Function DispatchMessage Lib "user32" Alias "DispatchMessageA" (lpMsg As APIMSG) As Long
+Private Declare Function CreateCompatibleDC Lib "gdi32" (ByVal hDC As Long) As Long
+Private Declare Function DeleteDC Lib "gdi32" (ByVal hDC As Long) As Long
+Private Declare Function SelectObject Lib "gdi32" (ByVal hDC As Long, ByVal hObject As Long) As Long
+Private Declare Function DeleteObject Lib "gdi32" (ByVal hObject As Long) As Long
 Private Declare Function GetModuleHandle Lib "kernel32" Alias "GetModuleHandleA" (ByVal lpModuleName As String) As Long
-Private Declare Function GdiplusStartup Lib "gdiplus" (token As Long, inputbuf As GdiplusStartupInput, Optional ByVal OutputBuf As Long = 0) As Long
-Private Declare Function GdipCreateBitmapFromScan0 Lib "gdiplus" (ByVal Width As Long, ByVal Height As Long, ByVal Stride As Long, ByVal PixelFormat As Long, Scan0 As Any, bitmap As Long) As Long
-Private Declare Function GdipDisposeImage Lib "gdiplus" (ByVal Image As Long) As Long
+Private Declare Function GetIconInfo Lib "user32" (ByVal hIcon As Long, piconinfo As ICONINFO) As Long
+Private Declare Function GetDIBits Lib "gdi32" (ByVal hDC As Long, ByVal hBitmap As Long, ByVal nStartScan As Long, ByVal nNumScans As Long, lpBits As Any, lpBI As BITMAPINFOHEADER, ByVal wUsage As Long) As Long
+Private Declare Function CreateDIBSection Lib "gdi32" (ByVal hDC As Long, lpBitsInfo As BITMAPINFOHEADER, ByVal wUsage As Long, lpBits As Long, ByVal Handle As Long, ByVal dw As Long) As Long
+'--- gdi+
+Private Declare Function GdiplusStartup Lib "gdiplus" (hToken As Long, pInputBuf As Any, Optional ByVal pOutputBuf As Long = 0) As Long
+Private Declare Function GdipCreateBitmapFromScan0 Lib "gdiplus" (ByVal lWidth As Long, ByVal lHeight As Long, ByVal lStride As Long, ByVal lPixelFormat As Long, ByVal Scan0 As Long, hBitmap As Long) As Long
+Private Declare Function GdipDisposeImage Lib "gdiplus" (ByVal hImage As Long) As Long
 Private Declare Function GdipGetImageGraphicsContext Lib "gdiplus" (ByVal hImage As Long, hGraphics As Long) As Long
 Private Declare Function GdipDeleteGraphics Lib "gdiplus" (ByVal hGraphics As Long) As Long
-Private Declare Function GdipDrawImageRectRect Lib "gdiplus" (ByVal hGraphics As Long, ByVal hImage As Long, ByVal dstX As Single, ByVal dstY As Single, ByVal dstWidth As Single, ByVal dstHeight As Single, ByVal srcX As Single, ByVal srcY As Single, ByVal srcWidth As Single, ByVal srcHeight As Single, Optional ByVal srcUnit As Long = UnitPixel, Optional ByVal imageAttributes As Long, Optional ByVal Callback As Long, Optional ByVal callbackData As Long) As Long
+Private Declare Function GdipDrawImageRectRect Lib "gdiplus" (ByVal hGraphics As Long, ByVal hImage As Long, ByVal dstX As Single, ByVal dstY As Single, ByVal dstWidth As Single, ByVal dstHeight As Single, ByVal srcX As Single, ByVal srcY As Single, ByVal srcWidth As Single, ByVal srcHeight As Single, Optional ByVal srcUnit As Long = UnitPixel, Optional ByVal hImageAttributes As Long, Optional ByVal pfnCallback As Long, Optional ByVal lCallbackData As Long) As Long
 Private Declare Function GdipCreateFromHDC Lib "gdiplus" (ByVal hDC As Long, hGraphics As Long) As Long
-Private Declare Function GdipCreateImageAttributes Lib "gdiplus" (ByRef imgAttr As Long) As Long
-Private Declare Function GdipSetImageAttributesColorMatrix Lib "gdiplus" (ByVal imgAttr As Long, ByVal clrAdjust As Long, ByVal clrAdjustEnabled As Long, ByRef clrMatrix As Any, ByRef grayMatrix As Any, ByVal clrMatrixFlags As Long) As Long
-Private Declare Function GdipDisposeImageAttributes Lib "gdiplus" (ByVal imgAttr As Long) As Long
-Private Declare Function GdipBitmapGetPixel Lib "gdiplus" (ByVal bitmap As Long, ByVal lX As Long, ByVal lY As Long, clrCurrent As Long) As Long
-Private Declare Function GdipCreateFontFamilyFromName Lib "gdiplus" (ByVal Name As Long, ByVal fontCollection As Long, fontFamily As Long) As Long
-Private Declare Function GdipGetGenericFontFamilySansSerif Lib "gdiplus" (fontFamily As Long) As Long
-Private Declare Function GdipDeleteFontFamily Lib "gdiplus" (ByVal fontFamily As Long) As Long
-Private Declare Function GdipCreateFont Lib "gdiplus" (ByVal fontFamily As Long, ByVal emSize As Single, ByVal Style As Long, ByVal unit As Long, createdfont As Long) As Long
-Private Declare Function GdipDeleteFont Lib "gdiplus" (ByVal curFont As Long) As Long
-Private Declare Function GdipCreateSolidFill Lib "gdiplus" (ByVal argb As Long, Brush As Long) As Long
-Private Declare Function GdipDeleteBrush Lib "gdiplus" (ByVal Brush As Long) As Long
-Private Declare Function GdipDrawString Lib "gdiplus" (ByVal graphics As Long, ByVal str As Long, ByVal Length As Long, ByVal thefont As Long, layoutRect As RECTF, ByVal StringFormat As Long, ByVal Brush As Long) As Long
-Private Declare Function GdipCreateStringFormat Lib "gdiplus" (ByVal formatAttributes As Long, ByVal language As Integer, StringFormat As Long) As Long
-Private Declare Function GdipDeleteStringFormat Lib "gdiplus" (ByVal StringFormat As Long) As Long
-Private Declare Function GdipSetStringFormatFlags Lib "gdiplus" (ByVal StringFormat As Long, ByVal flags As Long) As Long
-Private Declare Function GdipSetStringFormatAlign Lib "gdiplus" (ByVal StringFormat As Long, ByVal align As StringAlignment) As Long
-Private Declare Function GdipSetStringFormatLineAlign Lib "gdiplus" (ByVal StringFormat As Long, ByVal align As StringAlignment) As Long
-Private Declare Function GdipSetTextRenderingHint Lib "gdiplus" (ByVal graphics As Long, ByVal Mode As Long) As Long
+Private Declare Function GdipCreateImageAttributes Lib "gdiplus" (hImgAttr As Long) As Long
+Private Declare Function GdipSetImageAttributesColorMatrix Lib "gdiplus" (ByVal hImgAttr As Long, ByVal clrAdjust As Long, ByVal clrAdjustEnabled As Long, clrMatrix As Any, grayMatrix As Any, ByVal clrMatrixFlags As Long) As Long
+Private Declare Function GdipSetImageAttributesColorKeys Lib "gdiplus" (ByVal imgAttr As Long, ByVal adjustType As Long, ByVal adjustEnabled As Long, ByVal clrLow As Long, ByVal clrHigh As Long) As Long
+Private Declare Function GdipDisposeImageAttributes Lib "gdiplus" (ByVal hImgAttr As Long) As Long
+Private Declare Function GdipBitmapGetPixel Lib "gdiplus" (ByVal hBitmap As Long, ByVal lX As Long, ByVal lY As Long, clrCurrent As Any) As Long
+Private Declare Function GdipCreateFontFamilyFromName Lib "gdiplus" (ByVal lNamePtr As Long, ByVal hFontCollection As Long, hFontFamily As Long) As Long
+Private Declare Function GdipGetGenericFontFamilySansSerif Lib "gdiplus" (hFontFamily As Long) As Long
+Private Declare Function GdipDeleteFontFamily Lib "gdiplus" (ByVal hFontFamily As Long) As Long
+Private Declare Function GdipCreateFont Lib "gdiplus" (ByVal hFontFamily As Long, ByVal emSize As Single, ByVal lStyle As Long, ByVal lUnit As Long, hFont As Long) As Long
+Private Declare Function GdipDeleteFont Lib "gdiplus" (ByVal hFont As Long) As Long
+Private Declare Function GdipCreateSolidFill Lib "gdiplus" (ByVal argb As Long, hBrush As Long) As Long
+Private Declare Function GdipDeleteBrush Lib "gdiplus" (ByVal hBrush As Long) As Long
+Private Declare Function GdipDrawString Lib "gdiplus" (ByVal hGraphics As Long, ByVal lStrPtr As Long, ByVal lLength As Long, ByVal hFont As Long, uRect As RECTF, ByVal hStringFormat As Long, ByVal hBrush As Long) As Long
+Private Declare Function GdipCreateStringFormat Lib "gdiplus" (ByVal hFormatAttributes As Long, ByVal nLanguage As Integer, hStringFormat As Long) As Long
+Private Declare Function GdipDeleteStringFormat Lib "gdiplus" (ByVal hStringFormat As Long) As Long
+Private Declare Function GdipSetStringFormatFlags Lib "gdiplus" (ByVal hStringFormat As Long, ByVal lFlags As Long) As Long
+Private Declare Function GdipSetStringFormatAlign Lib "gdiplus" (ByVal hStringFormat As Long, ByVal eAlign As StringAlignment) As Long
+Private Declare Function GdipSetStringFormatLineAlign Lib "gdiplus" (ByVal hStringFormat As Long, ByVal eAlign As StringAlignment) As Long
+Private Declare Function GdipSetTextRenderingHint Lib "gdiplus" (ByVal hGraphics As Long, ByVal lMode As Long) As Long
+Private Declare Function GdipCloneBitmapAreaI Lib "gdiplus" (ByVal lX As Long, ByVal lY As Long, ByVal lWidth As Long, ByVal lHeight As Long, ByVal lPixelFormat As Long, ByVal srcBitmap As Long, dstBitmap As Long) As Long
+Private Declare Function GdipCreateBitmapFromHBITMAP Lib "gdiplus" (ByVal hBmp As Long, ByVal hPal As Long, hBtmap As Long) As Long
+Private Declare Function GdipCreateBitmapFromHICON Lib "gdiplus" (ByVal hIcon As Long, hBitmap As Long) As Long
+Private Declare Function GdipGetImageDimension Lib "gdiplus" (ByVal Image As Long, ByRef nWidth As Single, ByRef nHeight As Single) As Long '
 #If Not ImplUseShared Then
     Private Declare Function GetSystemTimeAsFileTime Lib "kernel32" (lpSystemTimeAsFileTime As Currency) As Long
-    Private Declare Function ApiRedrawWindow Lib "user32" Alias "RedrawWindow" (ByVal hWnd As Long, ByVal lprcUpdate As Long, ByVal hrgnUpdate As Long, ByVal fuRedraw As Long) As Long
     Private Declare Function CryptStringToBinary Lib "crypt32" Alias "CryptStringToBinaryW" (ByVal pszString As Long, ByVal cchString As Long, ByVal dwFlags As Long, ByVal pbBinary As Long, ByRef pcbBinary As Long, ByRef pdwSkip As Long, ByRef pdwFlags As Long) As Long
 #End If
 
-Private Type GdiplusStartupInput
-    GdiplusVersion           As Long
-    DebugEventCallback       As Long
-    SuppressBackgroundThread As Long
-    SuppressExternalCodecs   As Long
-End Type
-
 Private Type RECTF
-   Left             As Single
-   Top              As Single
-   Right            As Single
-   Bottom           As Single
+   Left                 As Single
+   Top                  As Single
+   Right                As Single
+   Bottom               As Single
 End Type
 
 Private Enum FontStyle
@@ -187,11 +213,47 @@ Private Enum StringAlignment
    StringAlignmentFar = 2
 End Enum
 
+Private Type BITMAPINFOHEADER
+    biSize              As Long
+    biWidth             As Long
+    biHeight            As Long
+    biPlanes            As Integer
+    biBitCount          As Integer
+    biCompression       As Long
+    biSizeImage         As Long
+    biXPelsPerMeter     As Long
+    biYPelsPerMeter     As Long
+    biClrUsed           As Long
+    biClrImportant      As Long
+End Type
+
 Private Type UcsRgbQuad
     R                   As Byte
     G                   As Byte
     B                   As Byte
     A                   As Byte
+End Type
+
+Private Type APIPOINT
+    X                   As Long
+    Y                   As Long
+End Type
+
+Private Type APIMSG
+    hWnd                As Long
+    lMessage            As Long
+    wParam              As Long
+    lParam              As Long
+    lTime               As Long
+    pt                  As APIPOINT
+End Type
+
+Private Type ICONINFO
+    fIcon               As Long
+    xHotspot            As Long
+    yHotspot            As Long
+    hbmMask             As Long
+    hbmColor            As Long
 End Type
 
 '=========================================================================
@@ -204,6 +266,8 @@ Private Const DEF_ENABLED           As Boolean = True
 Private Const DEF_OPACITY           As Double = 1
 Private Const DEF_ANIMATIONDURATION As Double = 0
 Private Const DEF_FORECOLOR         As Long = vbButtonText
+Private Const DEF_MANUALFOCUS       As Boolean = False
+Private Const DEF_MASKCOLOR         As Long = vbMagenta
 Private Const DEF_TEXTOPACITY       As Single = 1
 Private Const DEF_TEXTCOLOR         As Long = -1  '--- none
 Private Const DEF_TEXTFLAGS         As Long = ucsBflCenter
@@ -264,11 +328,14 @@ Private Const LNG_CARD_HEIGHT       As Long = 23
 Private m_eStyle                As UcsNineButtonStyleEnum
 Private m_sngOpacity            As Single
 Private m_sngAnimationDuration  As Single
-Private m_uButton(0 To ucsBstLast) As UcsNinePatchType
+Private m_uButton(0 To ucsBstLast) As UcsNineButtonStateType
 Private m_sCaption              As String
 Private WithEvents m_oFont      As StdFont
 Attribute m_oFont.VB_VarHelpID = -1
 Private m_clrFore               As Long
+Private m_bManualFocus          As Boolean
+Private m_oPicture              As StdPicture
+Private m_clrMask               As OLE_COLOR
 '--- run-time
 Private m_eState                As UcsNineButtonStateEnum
 Private m_hPrevBitmap           As Long
@@ -287,11 +354,13 @@ Private m_sngAnimationOpacity1  As Single
 Private m_sngAnimationOpacity2  As Single
 Private m_hFont                 As Long
 Private m_bShown                As Boolean
+Private m_hPictureBitmap        As Long
+Private m_hPictureAttributes    As Long
 #If ImplHasTimers Then
     Private m_uTimer            As FireOnceTimerData
 #End If
 
-Private Type UcsNinePatchType
+Private Type UcsNineButtonStateType
     ImageArray()        As Byte
     ImagePatch          As cNinePatch
     ImageOpacity        As Single
@@ -349,6 +418,7 @@ Private Enum UcsNineButtonResIndex
     ucsIdxFlatDarkHover
     ucsIdxFlatDarkPressed
     ucsIdxFlatDarkFocus
+    
     ucsIdxButtonDefNormal = 0
     ucsIdxButtonDefHover
     ucsIdxButtonDefPressed
@@ -360,6 +430,7 @@ Private Enum UcsNineButtonResIndex
     ucsIdxButtonRedHover
     ucsIdxButtonRedPressed
     ucsIdxButtonFocus
+    
     ucsIdxCardDefault = 0
     ucsIdxCardPrimary
     ucsIdxCardSuccess
@@ -386,6 +457,8 @@ End Function
 ' Properties
 '=========================================================================
 
+'== design-time ==========================================================
+
 Property Get Style() As UcsNineButtonStyleEnum
     Style = m_eStyle
 End Property
@@ -395,8 +468,8 @@ Property Let Style(ByVal eValue As UcsNineButtonStyleEnum)
         m_eStyle = eValue
         pvSetStyle eValue
         Repaint
+        PropertyChanged
     End If
-    PropertyChanged
 End Property
 
 Property Get Enabled() As Boolean
@@ -420,8 +493,8 @@ Property Let Opacity(ByVal sngValue As Single)
     If m_sngOpacity <> sngValue Then
         m_sngOpacity = sngValue
         Repaint
+        PropertyChanged
     End If
-    PropertyChanged
 End Property
 
 Property Get AnimationDuration() As Single
@@ -442,8 +515,8 @@ Property Let Caption(sValue As String)
     If m_sCaption <> sValue Then
         m_sCaption = sValue
         Repaint
+        PropertyChanged
     End If
-    PropertyChanged
 End Property
 
 Property Get Font() As StdFont
@@ -456,8 +529,8 @@ Property Set Font(oValue As StdFont)
         Set m_oFont = oValue
         pvPrepareFont m_oFont, m_hFont
         Repaint
+        PropertyChanged
     End If
-    PropertyChanged
 End Property
 
 Property Get ForeColor() As OLE_COLOR
@@ -469,8 +542,43 @@ Property Let ForeColor(ByVal clrValue As OLE_COLOR)
     If m_clrFore <> clrValue Then
         m_clrFore = clrValue
         Repaint
+        PropertyChanged
     End If
+End Property
+
+Property Get ManualFocus() As Boolean
+    ManualFocus = m_bManualFocus
+End Property
+
+Property Let ManualFocus(ByVal bValue As Boolean)
+    m_bManualFocus = bValue
     PropertyChanged
+End Property
+
+Property Get Picture() As StdPicture
+    Set Picture = m_oPicture
+End Property
+
+Property Set Picture(oValue As StdPicture)
+    If Not m_oPicture Is oValue Then
+        Set m_oPicture = oValue
+        pvPreparePicture m_oPicture, m_clrMask, m_hPictureBitmap, m_hPictureAttributes
+        Repaint
+        PropertyChanged
+    End If
+End Property
+
+Property Get MaskColor() As OLE_COLOR
+    MaskColor = m_clrMask
+End Property
+
+Property Let MaskColor(ByVal clrValue As OLE_COLOR)
+    If m_clrMask <> clrValue Then
+        m_clrMask = clrValue
+        pvPreparePicture m_oPicture, m_clrMask, m_hPictureBitmap, m_hPictureAttributes
+        Repaint
+        PropertyChanged
+    End If
 End Property
 
 Property Get ButtonState() As UcsNineButtonStateEnum
@@ -481,6 +589,20 @@ Property Let ButtonState(ByVal eState As UcsNineButtonStateEnum)
     pvState(m_eState And Not eState) = False
     pvState(eState And Not m_eState) = True
     PropertyChanged
+End Property
+
+'== run-time =============================================================
+
+Property Get Value() As Boolean
+Attribute Value.VB_UserMemId = 0
+Attribute Value.VB_MemberFlags = "400"
+    '--- do nothing
+End Property
+
+Property Let Value(ByVal bValue As Boolean)
+    If bValue Then
+        pvHandleClick
+    End If
 End Property
 
 Property Get ButtonImageArray(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Byte()
@@ -504,7 +626,6 @@ Property Let ButtonImageArray(Optional ByVal eState As UcsNineButtonStateEnum = 
         Set m_uButton(eState).ImagePatch = Nothing
     End If
     Repaint
-    PropertyChanged
 End Property
 
 Property Get ButtonImageOpacity(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -522,7 +643,6 @@ Property Let ButtonImageOpacity(Optional ByVal eState As UcsNineButtonStateEnum 
         m_uButton(eState).ImageOpacity = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonTextFont(Optional ByVal eState As UcsNineButtonStateEnum = -1) As StdFont
@@ -540,7 +660,6 @@ Property Set ButtonTextFont(Optional ByVal eState As UcsNineButtonStateEnum = -1
         Set m_uButton(eState).TextFont = oValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonTextFlags(Optional ByVal eState As UcsNineButtonStateEnum = -1) As UcsNineButtonTextFlagsEnum
@@ -558,7 +677,6 @@ Property Let ButtonTextFlags(Optional ByVal eState As UcsNineButtonStateEnum = -
         m_uButton(eState).TextFlags = eValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonTextColor(Optional ByVal eState As UcsNineButtonStateEnum = -1) As OLE_COLOR
@@ -576,7 +694,6 @@ Property Let ButtonTextColor(Optional ByVal eState As UcsNineButtonStateEnum = -
         m_uButton(eState).TextColor = clrValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonTextOpacity(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -594,7 +711,6 @@ Property Let ButtonTextOpacity(Optional ByVal eState As UcsNineButtonStateEnum =
         m_uButton(eState).TextOpacity = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonTextOffsetX(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -612,7 +728,6 @@ Property Let ButtonTextOffsetX(Optional ByVal eState As UcsNineButtonStateEnum =
         m_uButton(eState).TextOffsetX = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonTextOffsetY(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -630,7 +745,6 @@ Property Let ButtonTextOffsetY(Optional ByVal eState As UcsNineButtonStateEnum =
         m_uButton(eState).TextOffsetY = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonShadowColor(Optional ByVal eState As UcsNineButtonStateEnum = -1) As OLE_COLOR
@@ -648,7 +762,6 @@ Property Let ButtonShadowColor(Optional ByVal eState As UcsNineButtonStateEnum =
         m_uButton(eState).ShadowColor = clrValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonShadowOpacity(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -666,7 +779,6 @@ Property Let ButtonShadowOpacity(Optional ByVal eState As UcsNineButtonStateEnum
         m_uButton(eState).ShadowOpacity = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonShadowOffsetX(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -684,7 +796,6 @@ Property Let ButtonShadowOffsetX(Optional ByVal eState As UcsNineButtonStateEnum
         m_uButton(eState).ShadowOffsetX = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
 
 Property Get ButtonShadowOffsetY(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -702,8 +813,9 @@ Property Let ButtonShadowOffsetY(Optional ByVal eState As UcsNineButtonStateEnum
         m_uButton(eState).ShadowOffsetY = sngValue
         Repaint
     End If
-    PropertyChanged
 End Property
+
+'== private ==============================================================
 
 Private Property Get pvState(ByVal eState As UcsNineButtonStateEnum) As Boolean
     pvState = (m_eState And eState) <> 0
@@ -741,6 +853,7 @@ Public Sub Repaint()
         pvPrepareBitmap m_eState, m_hFocusBitmap, m_hBitmap
         pvPrepareAttribs m_sngOpacity * m_uButton(pvGetEffectiveState(m_eState)).ImageOpacity, m_hAttributes
         Refresh
+        pvPumpMessages ContainerHwnd, WM_PAINT, WM_PAINT
     End If
     Exit Sub
 EH:
@@ -755,6 +868,8 @@ End Sub
 Friend Sub frTimer()
     pvAnimateState DateTimer - m_dblAnimationStart, m_sngAnimationOpacity1, m_sngAnimationOpacity2
 End Sub
+
+'== private ==============================================================
 
 Private Function pvGetEffectiveState(ByVal eState As UcsNineButtonStateEnum) As UcsNineButtonStateEnum
     If (eState And ucsBstDisabled) <> 0 Then
@@ -776,10 +891,7 @@ Private Function pvGetEffectiveState(ByVal eState As UcsNineButtonStateEnum) As 
     pvGetEffectiveState = eState
 End Function
 
-Private Function pvPrepareBitmap( _
-            ByVal eState As UcsNineButtonStateEnum, _
-            hFocusBitmap As Long, _
-            hBitmap As Long) As Boolean
+Private Function pvPrepareBitmap(ByVal eState As UcsNineButtonStateEnum, hFocusBitmap As Long, hBitmap As Long) As Boolean
     Const FUNC_NAME     As String = "pvPrepareBitmap"
     Dim hGraphics       As Long
     Dim hNewFocusBitmap As Long
@@ -794,13 +906,16 @@ Private Function pvPrepareBitmap( _
     Dim uRect           As RECTF
     Dim hStringFormat   As Long
     Dim hFont           As Long
+    Dim sngPicWidth     As Single
+    Dim sngPicHeight    As Single
+    Dim sCaption        As String
     
     On Error GoTo EH
     If (eState And ucsBstFocused) <> 0 And (eState And ucsBstHoverPressed) <> ucsBstHoverPressed Then
         If hFocusBitmap = 0 Then
             With m_uButton(ucsBstFocused)
                 If Not .ImagePatch Is Nothing Then
-                    If GdipCreateBitmapFromScan0(ScaleWidth, ScaleHeight, ScaleWidth * 4, PixelFormat32bppARGB, ByVal 0, hNewFocusBitmap) <> 0 Then
+                    If GdipCreateBitmapFromScan0(ScaleWidth, ScaleHeight, ScaleWidth * 4, PixelFormat32bppARGB, 0, hNewFocusBitmap) <> 0 Then
                         GoTo QH
                     End If
                     If GdipGetImageGraphicsContext(hNewFocusBitmap, hGraphics) <> 0 Then
@@ -825,10 +940,13 @@ Private Function pvPrepareBitmap( _
         Else
             hFont = m_hFont
         End If
-        If GdipCreateBitmapFromScan0(ScaleWidth, ScaleHeight, ScaleWidth * 4, PixelFormat32bppARGB, ByVal 0, hNewBitmap) <> 0 Then
+        If GdipCreateBitmapFromScan0(ScaleWidth, ScaleHeight, ScaleWidth * 4, PixelFormat32bppARGB, 0, hNewBitmap) <> 0 Then
             GoTo QH
         End If
         If GdipGetImageGraphicsContext(hNewBitmap, hGraphics) <> 0 Then
+            GoTo QH
+        End If
+        If GdipSetTextRenderingHint(hGraphics, TextRenderingHintClearTypeGridFit) <> 0 Then
             GoTo QH
         End If
         If Not .ImagePatch Is Nothing Then
@@ -840,46 +958,47 @@ Private Function pvPrepareBitmap( _
             lWidth = ScaleWidth
             lHeight = ScaleHeight
         End If
-        RaiseEvent OwnerDraw(hGraphics, hFont, eState, lLeft, lTop, lWidth, lHeight)
-        If hFont <> 0 Then
-            If GdipCreateSolidFill(pvTranslateColor(IIf(.TextColor = DEF_TEXTCOLOR, m_clrFore, .TextColor), .TextOpacity), hBrush) <> 0 Then
-                GoTo QH
-            End If
-            If GdipCreateStringFormat(0, 0, hStringFormat) <> 0 Then
-                GoTo QH
-            End If
-            If GdipSetStringFormatAlign(hStringFormat, .TextFlags And 3) <> 0 Then
-                GoTo QH
-            End If
-            If GdipSetStringFormatLineAlign(hStringFormat, (.TextFlags \ 4) And 3) <> 0 Then
-                GoTo QH
-            End If
-            If GdipSetStringFormatFlags(hStringFormat, .TextFlags \ 16) <> 0 Then
-                GoTo QH
-            End If
-            lOffset = .TextOffsetX * -((eState And ucsBstHoverPressed) = ucsBstHoverPressed)
-            uRect.Left = lLeft + lOffset
-            lOffset = .TextOffsetY * -((eState And ucsBstHoverPressed) = ucsBstHoverPressed)
-            uRect.Top = lTop + lOffset
-            uRect.Right = lWidth
-            uRect.Bottom = lHeight
-            If .ShadowOffsetX <> 0 Or .ShadowOffsetY <> 0 Or .ImagePatch Is Nothing Then
-                If GdipCreateSolidFill(pvTranslateColor(.ShadowColor, .ShadowOpacity), hShadowBrush) <> 0 Then
+        sCaption = m_sCaption
+        RaiseEvent OwnerDraw(hGraphics, hFont, eState, lLeft, lTop, lWidth, lHeight, sCaption, m_hPictureBitmap)
+        If lWidth > 0 And lHeight > 0 Then
+            If m_hPictureBitmap <> 0 Then
+                If GdipGetImageDimension(m_hPictureBitmap, sngPicWidth, sngPicHeight) <> 0 Then
                     GoTo QH
                 End If
-                If GdipSetTextRenderingHint(hGraphics, TextRenderingHintAntiAlias) <> 0 Then
+                If GdipDrawImageRectRect(hGraphics, m_hPictureBitmap, lLeft + (lWidth - sngPicWidth) / 2, lTop + (lHeight - sngPicHeight) / 2, sngPicWidth, sngPicHeight, 0, 0, sngPicWidth, sngPicHeight, , m_hPictureAttributes) <> 0 Then
                     GoTo QH
                 End If
-                uRect.Left = uRect.Left + .ShadowOffsetX
-                uRect.Top = uRect.Top + .ShadowOffsetY
-                If GdipDrawString(hGraphics, StrPtr(m_sCaption), -1, hFont, uRect, hStringFormat, hShadowBrush) <> 0 Then
+            ElseIf hFont <> 0 And LenB(sCaption) <> 0 Then
+                If GdipCreateSolidFill(pvTranslateColor(IIf(.TextColor = DEF_TEXTCOLOR, m_clrFore, .TextColor), .TextOpacity), hBrush) <> 0 Then
                     GoTo QH
                 End If
-                uRect.Left = uRect.Left - .ShadowOffsetX
-                uRect.Top = uRect.Top - .ShadowOffsetY
-            End If
-            If GdipDrawString(hGraphics, StrPtr(m_sCaption), -1, hFont, uRect, hStringFormat, hBrush) <> 0 Then
-                GoTo QH
+                If Not pvPrepareStringFormat(.TextFlags, hStringFormat) Then
+                    GoTo QH
+                End If
+                lOffset = .TextOffsetX * -((eState And ucsBstHoverPressed) = ucsBstHoverPressed)
+                uRect.Left = lLeft + lOffset
+                lOffset = .TextOffsetY * -((eState And ucsBstHoverPressed) = ucsBstHoverPressed)
+                uRect.Top = lTop + lOffset
+                uRect.Right = lWidth
+                uRect.Bottom = lHeight
+                If .ShadowOffsetX <> 0 Or .ShadowOffsetY <> 0 Or .ImagePatch Is Nothing Then
+                    If GdipCreateSolidFill(pvTranslateColor(.ShadowColor, .ShadowOpacity), hShadowBrush) <> 0 Then
+                        GoTo QH
+                    End If
+                    If GdipSetTextRenderingHint(hGraphics, TextRenderingHintAntiAlias) <> 0 Then
+                        GoTo QH
+                    End If
+                    uRect.Left = uRect.Left + .ShadowOffsetX
+                    uRect.Top = uRect.Top + .ShadowOffsetY
+                    If GdipDrawString(hGraphics, StrPtr(sCaption), -1, hFont, uRect, hStringFormat, hShadowBrush) <> 0 Then
+                        GoTo QH
+                    End If
+                    uRect.Left = uRect.Left - .ShadowOffsetX
+                    uRect.Top = uRect.Top - .ShadowOffsetY
+                End If
+                If GdipDrawString(hGraphics, StrPtr(sCaption), -1, hFont, uRect, hStringFormat, hBrush) <> 0 Then
+                    GoTo QH
+                End If
             End If
         End If
     End With
@@ -937,6 +1056,272 @@ EH:
     Resume QH
 End Function
 
+Private Function pvPrepareAttribs(ByVal sngAlpha As Single, hAttributes As Long) As Boolean
+    Const FUNC_NAME     As String = "pvPrepareAttribs"
+    Dim clrMatrix(0 To 4, 0 To 4) As Single
+    Dim hNewAttributes  As Long
+    
+    On Error GoTo EH
+    If GdipCreateImageAttributes(hNewAttributes) <> 0 Then
+        GoTo QH
+    End If
+    clrMatrix(0, 0) = 1
+    clrMatrix(1, 1) = 1
+    clrMatrix(2, 2) = 1
+    clrMatrix(3, 3) = sngAlpha
+    clrMatrix(4, 4) = 1
+    If GdipSetImageAttributesColorMatrix(hNewAttributes, 0, 1, clrMatrix(0, 0), clrMatrix(0, 0), 0) <> 0 Then '
+        GoTo QH
+    End If
+    '--- commit
+    If hAttributes <> 0 Then
+        Call GdipDisposeImageAttributes(hAttributes)
+        hAttributes = 0
+    End If
+    hAttributes = hNewAttributes
+    hNewAttributes = 0
+    '--- success
+    pvPrepareAttribs = True
+QH:
+    If hNewAttributes <> 0 Then
+        Call GdipDisposeImageAttributes(hNewAttributes)
+        hNewAttributes = 0
+    End If
+    Exit Function
+EH:
+    PrintError FUNC_NAME
+    Resume QH
+End Function
+
+Private Function pvPrepareFont(oFont As StdFont, hFont As Long) As Boolean
+    Const FUNC_NAME     As String = "pvPrepareFont"
+    Dim hFamily         As Long
+    Dim hNewFont        As Long
+    Dim eStyle          As FontStyle
+
+    On Error GoTo EH
+    If oFont Is Nothing Then
+        GoTo QH
+    End If
+    If GdipCreateFontFamilyFromName(StrPtr(oFont.Name), 0, hFamily) <> 0 Then
+        If GdipGetGenericFontFamilySansSerif(hFamily) <> 0 Then
+            GoTo QH
+        End If
+    End If
+    eStyle = FontStyleBold * -oFont.Bold _
+        Or FontStyleItalic * -oFont.Italic _
+        Or FontStyleUnderline * -oFont.Underline _
+        Or FontStyleStrikeout * -oFont.Strikethrough
+    If GdipCreateFont(hFamily, oFont.Size, eStyle, UnitPoint, hNewFont) <> 0 Then
+        GoTo QH
+    End If
+    '--- commit
+    If hFont <> 0 Then
+        Call GdipDeleteFont(hFont)
+    End If
+    hFont = hNewFont
+    hNewFont = 0
+    '--- success
+    pvPrepareFont = True
+QH:
+    If hFamily <> 0 Then
+        Call GdipDeleteFontFamily(hFamily)
+        hFamily = 0
+    End If
+    If hNewFont <> 0 Then
+        Call GdipDeleteFont(hNewFont)
+        hNewFont = 0
+    End If
+    Exit Function
+EH:
+    PrintError FUNC_NAME
+    Resume QH
+End Function
+
+Private Function pvPrepareStringFormat(ByVal lFlags As UcsNineButtonTextFlagsEnum, hStringFormat As Long) As Boolean
+    Const FUNC_NAME     As String = "pvPrepareStringFormat"
+    Dim hNewFormat      As Long
+    
+    On Error GoTo EH
+    If GdipCreateStringFormat(0, 0, hNewFormat) <> 0 Then
+        GoTo QH
+    End If
+    If GdipSetStringFormatAlign(hNewFormat, lFlags And 3) <> 0 Then
+        GoTo QH
+    End If
+    If GdipSetStringFormatLineAlign(hNewFormat, (lFlags \ 4) And 3) <> 0 Then
+        GoTo QH
+    End If
+    If GdipSetStringFormatFlags(hNewFormat, lFlags \ 16) <> 0 Then
+        GoTo QH
+    End If
+    '--- commit
+    If hStringFormat <> 0 Then
+        Call GdipDeleteStringFormat(hStringFormat)
+    End If
+    hStringFormat = hNewFormat
+    hNewFormat = 0
+    '--- success
+    pvPrepareStringFormat = True
+QH:
+    If hNewFormat <> 0 Then
+        Call GdipDeleteStringFormat(hNewFormat)
+        hNewFormat = 0
+    End If
+    Exit Function
+EH:
+    PrintError FUNC_NAME
+    Resume Next
+End Function
+
+Private Function pvPreparePicture(oPicture As StdPicture, ByVal clrMask As OLE_COLOR, hPictureBitmap As Long, hPictureAttributes As Long) As Boolean
+    Const FUNC_NAME     As String = "pvPreparePicture"
+    Dim hTempBitmap     As Long
+    Dim hNewBitmap      As Long
+    Dim hNewAttributes  As Long
+    Dim lWidth          As Long
+    Dim lHeight         As Long
+    Dim uHdr            As BITMAPINFOHEADER
+    Dim hMemDC          As Long
+    Dim uInfo           As ICONINFO
+    Dim baColorBits()   As Byte
+    Dim bHasAlpha       As Boolean
+    Dim hDib            As Long
+    Dim lpBits          As Long
+    Dim hPrevDib        As Long
+    Dim lIdx            As Long
+    
+    On Error GoTo EH
+    If Not oPicture Is Nothing Then
+        If oPicture.Handle <> 0 Then
+            Select Case oPicture.Type
+            Case vbPicTypeBitmap
+                If GdipCreateBitmapFromHBITMAP(oPicture.Handle, 0, hNewBitmap) <> 0 Then
+                    GoTo QH
+                End If
+                If clrMask <> -1 Then
+                    If GdipCreateImageAttributes(hNewAttributes) <> 0 Then
+                        GoTo QH
+                    End If
+                    If GdipSetImageAttributesColorKeys(hNewAttributes, 0, 1, pvTranslateColor(clrMask), pvTranslateColor(clrMask)) <> 0 Then
+                        GoTo QH
+                    End If
+                End If
+            Case Else
+                lWidth = HM2Pix(oPicture.Width)
+                lHeight = HM2Pix(oPicture.Height)
+                hMemDC = CreateCompatibleDC(0)
+                If hMemDC = 0 Then
+                    GoTo QH
+                End If
+                With uHdr
+                    .biSize = Len(uHdr)
+                    .biPlanes = 1
+                    .biBitCount = 32
+                    .biWidth = lWidth
+                    .biHeight = -lHeight
+                    .biSizeImage = (4 * lWidth) * lHeight
+                End With
+                If oPicture.Type = vbPicTypeIcon Then
+                    If GetIconInfo(oPicture.Handle, uInfo) = 0 Then
+                        GoTo QH
+                    End If
+                    ReDim baColorBits(0 To uHdr.biSizeImage - 1) As Byte
+                    If GetDIBits(hMemDC, uInfo.hbmColor, 0, lHeight, baColorBits(0), uHdr, DIB_RGB_COLORS) = 0 Then
+                        GoTo QH
+                    End If
+                    If GdipCreateBitmapFromScan0(lWidth, lHeight, 4 * lWidth, PixelFormat32bppARGB, VarPtr(baColorBits(0)), hTempBitmap) <> 0 Then
+                        GoTo QH
+                    End If
+                    For lIdx = 3 To UBound(baColorBits) Step 4
+                        If baColorBits(lIdx) <> 0 Then
+                            bHasAlpha = True
+                            Exit For
+                        End If
+                    Next
+                    If Not bHasAlpha Then
+                        '--- note: GdipCreateBitmapFromHICON working ok for old-style (single-bit) transparent icons only
+                        If GdipCreateBitmapFromHICON(oPicture.Handle, hNewBitmap) <> 0 Then
+                            GoTo QH
+                        End If
+                    Else
+                        '--- note: pixel format (or size) *must* differ from hTempBitmap's one for actual
+                        '---   memcpy to happen (PixelFormat32bppARGB -> PixelFormat32bppPARGB)
+                        If GdipCloneBitmapAreaI(0, 0, lWidth, lHeight, PixelFormat32bppPARGB, hTempBitmap, hNewBitmap) <> 0 Then
+                            GoTo QH
+                        End If
+                    End If
+                Else
+                    hDib = CreateDIBSection(hMemDC, uHdr, DIB_RGB_COLORS, lpBits, 0, 0)
+                    If hDib = 0 Then
+                        GoTo QH
+                    End If
+                    hPrevDib = SelectObject(hMemDC, hDib)
+                    pvRenderPicture oPicture, hMemDC, 0, 0, lWidth, lHeight, 0, oPicture.Height, oPicture.Width, -oPicture.Height
+                    If GdipCreateBitmapFromScan0(lWidth, lHeight, 4 * lWidth, PixelFormat32bppARGB, lpBits, hTempBitmap) <> 0 Then
+                        GoTo QH
+                    End If
+                    If GdipCloneBitmapAreaI(0, 0, lWidth, lHeight, PixelFormat32bppPARGB, hTempBitmap, hNewBitmap) <> 0 Then
+                        GoTo QH
+                    End If
+                End If
+            End Select
+        End If
+    End If
+    '--- commit
+    If hPictureBitmap <> 0 Then
+        Call GdipDisposeImage(hPictureBitmap)
+        hPictureBitmap = 0
+    End If
+    hPictureBitmap = hNewBitmap
+    hNewBitmap = 0
+    If hPictureAttributes <> 0 Then
+        Call GdipDisposeImageAttributes(hPictureAttributes)
+        hPictureAttributes = 0
+    End If
+    hPictureAttributes = hNewAttributes
+    hNewAttributes = 0
+    '--- success
+    pvPreparePicture = True
+QH:
+    If hNewBitmap <> 0 Then
+        Call GdipDisposeImage(hNewBitmap)
+        hNewBitmap = 0
+    End If
+    If hNewAttributes <> 0 Then
+        Call GdipDisposeImageAttributes(hNewAttributes)
+        hNewAttributes = 0
+    End If
+    If hTempBitmap <> 0 Then
+        Call GdipDisposeImage(hTempBitmap)
+        hTempBitmap = 0
+    End If
+    If hPrevDib <> 0 Then
+        Call SelectObject(hMemDC, hPrevDib)
+        hPrevDib = 0
+    End If
+    If hDib <> 0 Then
+        Call DeleteObject(hDib)
+        hDib = 0
+    End If
+    If uInfo.hbmColor <> 0 Then
+        Call DeleteObject(uInfo.hbmColor)
+        uInfo.hbmColor = 0
+    End If
+    If uInfo.hbmMask <> 0 Then
+        Call DeleteObject(uInfo.hbmMask)
+        uInfo.hbmMask = 0
+    End If
+    If hMemDC <> 0 Then
+        Call DeleteDC(hMemDC)
+        hMemDC = 0
+    End If
+    Exit Function
+EH:
+    PrintError FUNC_NAME
+    Resume QH
+End Function
+
 Private Function pvTranslateColor(ByVal clrValue As OLE_COLOR, Optional ByVal Alpha As Single = 1) As Long
     Dim uQuad           As UcsRgbQuad
     Dim lTemp           As Long
@@ -956,81 +1341,15 @@ Private Function pvTranslateColor(ByVal clrValue As OLE_COLOR, Optional ByVal Al
     Call CopyMemory(pvTranslateColor, uQuad, 4)
 End Function
 
-Private Function pvPrepareAttribs(ByVal sngAlpha As Single, hAttributes As Long) As Boolean
-    Const FUNC_NAME     As String = "pvPrepareAttribs"
-    Dim clrMatrix(0 To 4, 0 To 4) As Single
-    Dim hTempAttributes As Long
-    
-    On Error GoTo EH
-    If GdipCreateImageAttributes(hTempAttributes) <> 0 Then
-        GoTo QH
-    End If
-    clrMatrix(0, 0) = 1
-    clrMatrix(1, 1) = 1
-    clrMatrix(2, 2) = 1
-    clrMatrix(3, 3) = sngAlpha
-    clrMatrix(4, 4) = 1
-    If GdipSetImageAttributesColorMatrix(hTempAttributes, 0, 1, clrMatrix(0, 0), clrMatrix(0, 0), 0) <> 0 Then '
-        GoTo QH
-    End If
-    '--- commit
-    If hAttributes <> 0 Then
-        Call GdipDisposeImageAttributes(hAttributes)
-        hAttributes = 0
-    End If
-    hAttributes = hTempAttributes
-    hTempAttributes = 0
-    '--- success
-    pvPrepareAttribs = True
-QH:
-    If hTempAttributes <> 0 Then
-        Call GdipDisposeImageAttributes(hTempAttributes)
-        hTempAttributes = 0
-    End If
-    Exit Function
-EH:
-    PrintError FUNC_NAME
-    Resume QH
-End Function
-
-Private Function pvPrepareFont(oFont As StdFont, hFont As Long) As Boolean
-    Const FUNC_NAME     As String = "pvPrepareFont"
-    Dim hFamily         As Long
-    Dim eStyle          As FontStyle
-    
-    On Error GoTo EH
-    If hFont <> 0 Then
-        Call GdipDeleteFont(hFont)
-        hFont = 0
-    End If
-    If GdipCreateFontFamilyFromName(StrPtr(oFont.Name), 0, hFamily) <> 0 Then
-        If GdipGetGenericFontFamilySansSerif(hFamily) <> 0 Then
-            GoTo QH
-        End If
-    End If
-    eStyle = FontStyleBold * -oFont.Bold _
-        Or FontStyleItalic * -oFont.Italic _
-        Or FontStyleUnderline * -oFont.Underline _
-        Or FontStyleStrikeout * -oFont.Strikethrough
-    If GdipCreateFont(hFamily, oFont.Size, eStyle, UnitPoint, hFont) <> 0 Then
-        GoTo QH
-    End If
-    '--- success
-    pvPrepareFont = True
-QH:
-    If hFamily <> 0 Then
-        Call GdipDeleteFontFamily(hFamily)
-        hFamily = 0
-    End If
-    Exit Function
-EH:
-    PrintError FUNC_NAME
-    Resume QH
-End Function
-
 Private Function pvRegisterCancelMode(oCtl As Object) As Boolean
-    On Error GoTo QH
-    Parent.RegisterCancelMode oCtl
+    Dim bHandled        As Boolean
+    
+    RaiseEvent RegisterCancelMode(oCtl, bHandled)
+    If Not bHandled Then
+        On Error GoTo QH
+        Parent.RegisterCancelMode oCtl
+        On Error GoTo 0
+    End If
     '--- success
     pvRegisterCancelMode = True
 QH:
@@ -1038,17 +1357,15 @@ End Function
 
 Private Function pvHitTest(ByVal X As Single, ByVal Y As Single) As HitResultConstants
     Const FUNC_NAME     As String = "pvHitTest"
-    Dim clrCurrent      As Long
-    Dim lAlpha          As Long
+    Dim uQuad           As UcsRgbQuad
     
     On Error GoTo EH
     pvHitTest = vbHitResultHit
-    If GdipBitmapGetPixel(m_hBitmap, X, Y, clrCurrent) <> 0 Then
+    If GdipBitmapGetPixel(m_hBitmap, X, Y, uQuad) <> 0 Then
         GoTo QH
     End If
-    Call CopyMemory(lAlpha, ByVal UnsignedAdd(VarPtr(clrCurrent), 3), 1)
-    If lAlpha < 255 Then
-        If lAlpha > 0 Then
+    If uQuad.A < 255 Then
+        If uQuad.A > 0 Then
             pvHitTest = vbHitResultTransparent
         Else
             pvHitTest = vbHitResultOutside
@@ -1386,24 +1703,22 @@ Private Sub pvSetCardStyle( _
     End With
 End Sub
 
-Private Function pvResExtract(ByVal hResBitmap As Long, ByVal eIdx As UcsNineButtonResIndex, ByVal lTop As Long, ByVal lWidth As Long, ByVal lHeight As Long) As cNinePatch
+Private Function pvResExtract( _
+            ByVal hResBitmap As Long, _
+            ByVal eIdx As UcsNineButtonResIndex, _
+            ByVal lTop As Long, _
+            ByVal lWidth As Long, _
+            ByVal lHeight As Long) As cNinePatch
     Const FUNC_NAME     As String = "pvResExtract"
     Dim hNewBitmap      As Long
-    Dim hGraphics       As Long
     Dim lLeft           As Long
     Dim oRetVal         As cNinePatch
     
     On Error GoTo EH
-    If GdipCreateBitmapFromScan0(lWidth, lHeight, lHeight * 4, PixelFormat32bppARGB, ByVal 0, hNewBitmap) <> 0 Then
-        GoTo QH
-    End If
-    If GdipGetImageGraphicsContext(hNewBitmap, hGraphics) <> 0 Then
-        GoTo QH
-    End If
     lLeft = eIdx * lWidth
     lTop = lTop + lHeight * (lLeft \ LNG_RES_WIDTH)
     lLeft = lLeft Mod LNG_RES_WIDTH
-    If GdipDrawImageRectRect(hGraphics, hResBitmap, 0, 0, lWidth, lHeight, lLeft, lTop, lWidth, lHeight) <> 0 Then
+    If GdipCloneBitmapAreaI(lLeft, lTop, lWidth, lHeight, 0, hResBitmap, hNewBitmap) <> 0 Then
         GoTo QH
     End If
     Set oRetVal = New cNinePatch
@@ -1418,10 +1733,6 @@ QH:
         Call GdipDisposeImage(hNewBitmap)
         hNewBitmap = 0
     End If
-    If hGraphics <> 0 Then
-        Call GdipDeleteGraphics(hGraphics)
-        hGraphics = 0
-    End If
     Exit Function
 EH:
     PrintError FUNC_NAME
@@ -1430,7 +1741,7 @@ End Function
 
 Private Sub pvSetEmptyStyle()
     Dim lIdx            As Long
-    Dim uEmpty          As UcsNinePatchType
+    Dim uEmpty          As UcsNineButtonStateType
 
     With uEmpty
         .ImageOpacity = DEF_IMAGEOPACITY
@@ -1445,24 +1756,63 @@ Private Sub pvSetEmptyStyle()
     Next
 End Sub
 
-#If Not ImplUseShared Then
-Private Function UnsignedAdd(ByVal lUnsignedPtr As Long, ByVal lSignedOffset As Long) As Long
-    '--- note: safely add *signed* offset to *unsigned* ptr for *unsigned* retval w/o overflow in LARGEADDRESSAWARE processes
-    UnsignedAdd = ((lUnsignedPtr Xor &H80000000) + lSignedOffset) Xor &H80000000
-End Function
+Private Sub pvHandleMouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    Const FUNC_NAME     As String = "pvHandleMouseDown"
+    
+    On Error GoTo EH
+    m_nDownButton = Button
+    m_nDownShift = Shift
+    m_sngDownX = X
+    m_sngDownY = Y
+    If (Button And vbLeftButton) <> 0 Then
+        If pvHitTest(X, Y) <> vbHitResultOutside Then
+            pvRegisterCancelMode Me
+            pvState(ucsBstPressed Or ucsBstFocused * (1 + m_bManualFocus)) = True
+        End If
+    End If
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
+End Sub
 
+Private Sub pvHandleClick()
+    Const FUNC_NAME     As String = "pvHandleClick"
+    
+    On Error GoTo EH
+    pvState(ucsBstPressed) = True
+    pvState(ucsBstPressed) = False
+    pvPumpMessages ContainerHwnd, WM_PAINT, WM_PAINT
+    RaiseEvent Click
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
+End Sub
+
+Private Sub pvPumpMessages(ByVal hWnd As Long, ByVal lFromMsg As Long, ByVal lToMsg As Long)
+    Dim uMsg            As APIMSG
+    
+    Do While PeekMessage(uMsg, hWnd, lFromMsg, lToMsg, PM_REMOVE) <> 0
+        Call DispatchMessage(uMsg)
+    Loop
+End Sub
+
+Private Sub pvRenderPicture(pPicture As IPicture, hDC As Long, X As Long, Y As Long, cx As Long, cy As Long, xSrc As OLE_XPOS_HIMETRIC, ySrc As OLE_YPOS_HIMETRIC, cxSrc As OLE_XSIZE_HIMETRIC, cySrc As OLE_YSIZE_HIMETRIC)
+    If Not pPicture Is Nothing Then
+        If pPicture.Handle <> 0 Then
+            pPicture.Render hDC, X, Y, cx, cy, xSrc, ySrc, cxSrc, cySrc, ByVal 0
+        End If
+    End If
+End Sub
+
+#If Not ImplUseShared Then
 Private Property Get DateTimer() As Double
     Dim cDateTime       As Currency
     
     Call GetSystemTimeAsFileTime(cDateTime)
     DateTimer = CDbl(cDateTime - 9435304800000@) / 1000#
 End Property
-
-Private Function RedrawWindow(ByVal hWnd As Long, Optional ByVal UpdateImmediate As Boolean) As Long
-    If hWnd <> 0 Then
-        RedrawWindow = ApiRedrawWindow(hWnd, 0, 0, RDW_INVALIDATE Or RDW_ALLCHILDREN Or (-UpdateImmediate * (RDW_ERASE Or RDW_FRAME Or RDW_UPDATENOW)))
-    End If
-End Function
 
 Private Function FromBase64Array(sText As String) As Byte()
     Dim lSize           As Long
@@ -1479,10 +1829,14 @@ Private Function FromBase64Array(sText As String) As Byte()
         FromBase64Array = vbNullString
     End If
 End Function
+
+Private Function HM2Pix(ByVal Value As Double) As Long
+   HM2Pix = Int(Value * 1440 / 2540 / Screen.TwipsPerPixelX + 0.5)
+End Function
 #End If
 
 '=========================================================================
-' Base class events
+' Event handlers
 '=========================================================================
 
 Private Sub m_oFont_FontChanged(ByVal PropertyName As String)
@@ -1499,30 +1853,40 @@ Private Sub UserControl_HitTest(X As Single, Y As Single, HitResult As Integer)
     End If
 End Sub
 
-Private Sub UserControl_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    Const FUNC_NAME     As String = "UserControl_MouseDown"
-    
-    On Error GoTo EH
-    m_nDownButton = Button
-    m_nDownShift = Shift
-    m_sngDownX = X
-    m_sngDownY = Y
-    If (Button And vbLeftButton) <> 0 Then
-        If pvHitTest(X, Y) <> vbHitResultOutside Then
-            pvRegisterCancelMode Me
-            pvState(ucsBstPressed Or ucsBstFocused) = True
-        End If
+Private Sub UserControl_KeyDown(KeyCode As Integer, Shift As Integer)
+    RaiseEvent KeyDown(KeyCode, Shift)
+End Sub
+
+Private Sub UserControl_KeyPress(KeyAscii As Integer)
+    RaiseEvent KeyPress(KeyAscii)
+    If KeyAscii = 32 Or KeyAscii = 13 Then
+        pvHandleClick
+        KeyAscii = 0
     End If
-    Exit Sub
-EH:
-    PrintError FUNC_NAME
-    Resume Next
+End Sub
+
+Private Sub UserControl_AccessKeyPress(KeyAscii As Integer)
+    RaiseEvent KeyPress(KeyAscii)
+    If KeyAscii <> 0 Then
+        pvHandleClick
+        KeyAscii = 0
+    End If
+End Sub
+
+Private Sub UserControl_KeyUp(KeyCode As Integer, Shift As Integer)
+    RaiseEvent KeyUp(KeyCode, Shift)
+End Sub
+
+Private Sub UserControl_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    RaiseEvent MouseDown(Button, Shift, X, Y)
+    pvHandleMouseDown Button, Shift, X, Y
 End Sub
 
 Private Sub UserControl_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
     Const FUNC_NAME     As String = "UserControl_MouseMove"
     
     On Error GoTo EH
+    RaiseEvent MouseMove(Button, Shift, X, Y)
     If X >= 0 And X < ScaleWidth And Y >= 0 And Y < ScaleHeight Then
         If Not pvState(ucsBstHover) Then
             If pvRegisterCancelMode(Me) Then
@@ -1541,11 +1905,15 @@ EH:
 End Sub
 
 Private Sub UserControl_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    Const FUNC_NAME     As String = "UserControl_MouseUp"
+    
+    On Error GoTo EH
+    RaiseEvent MouseUp(Button, Shift, X, Y)
     If (Button And vbLeftButton) <> 0 Then
         pvState(ucsBstPressed) = False
     End If
     If X >= 0 And X < ScaleWidth And Y >= 0 And Y < ScaleHeight Then
-        Call RedrawWindow(ContainerHwnd, True)
+        pvPumpMessages ContainerHwnd, WM_PAINT, WM_PAINT
         If (m_nDownButton And Button And vbLeftButton) <> 0 Then
             RaiseEvent Click
         ElseIf (m_nDownButton And Button And vbRightButton) <> 0 Then
@@ -1553,10 +1921,14 @@ Private Sub UserControl_MouseUp(Button As Integer, Shift As Integer, X As Single
         End If
     End If
     m_nDownButton = 0
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
 
 Private Sub UserControl_DblClick()
-    UserControl_MouseDown vbLeftButton, m_nDownShift, m_sngDownX, m_sngDownY
+    pvHandleMouseDown vbLeftButton, m_nDownShift, m_sngDownX, m_sngDownY
     RaiseEvent DblClick
 End Sub
 
@@ -1568,6 +1940,7 @@ Private Sub UserControl_Paint()
     If Not m_bShown Then
         m_bShown = True
         pvPrepareBitmap m_eState, m_hFocusBitmap, m_hBitmap
+        pvPrepareAttribs m_sngOpacity * m_uButton(pvGetEffectiveState(m_eState)).ImageOpacity, m_hAttributes
     End If
     If m_hBitmap <> 0 Then
         If GdipCreateFromHDC(hDC, hGraphics) <> 0 Then
@@ -1601,11 +1974,29 @@ EH:
 End Sub
 
 Private Sub UserControl_EnterFocus()
-    pvState(ucsBstFocused) = True
+    Const FUNC_NAME     As String = "UserControl_EnterFocus"
+    
+    On Error GoTo EH
+    If Not m_bManualFocus Then
+        pvState(ucsBstFocused) = True
+    End If
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
 
 Private Sub UserControl_ExitFocus()
-    pvState(ucsBstFocused) = False
+    Const FUNC_NAME     As String = "UserControl_ExitFocus"
+    
+    On Error GoTo EH
+    If Not m_bManualFocus Then
+        pvState(ucsBstFocused) = False
+    End If
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
 
 Private Sub UserControl_InitProperties()
@@ -1616,12 +2007,11 @@ Private Sub UserControl_InitProperties()
     Enabled = DEF_ENABLED
     Opacity = DEF_OPACITY
     AnimationDuration = DEF_ANIMATIONDURATION
-'    ButtonImageArray(ucsBstNormal) = FromBase64Array(DEF_BUTTON_NORMAL)
-'    ButtonImageArray(ucsBstHover) = FromBase64Array(DEF_BUTTON_HOVER)
-'    ButtonImageArray(ucsBstFocused) = FromBase64Array(DEF_BUTTON_FOCUS)
     Caption = Ambient.DisplayName
     Set Font = Ambient.Font
     ForeColor = DEF_FORECOLOR
+    ManualFocus = DEF_MANUALFOCUS
+    MaskColor = DEF_MASKCOLOR
     Exit Sub
 EH:
     PrintError FUNC_NAME
@@ -1637,14 +2027,11 @@ Private Sub UserControl_ReadProperties(PropBag As PropertyBag)
         Enabled = .ReadProperty("Enabled", DEF_ENABLED)
         Opacity = .ReadProperty("Opacity", DEF_OPACITY)
         AnimationDuration = .ReadProperty("AnimationDuration", DEF_ANIMATIONDURATION)
-'        ButtonImageArray(ucsBstNormal) = .ReadProperty("ButtonNormal", FromBase64Array(DEF_BUTTON_NORMAL))
-'        ButtonImageArray(ucsBstHover) = .ReadProperty("ButtonHover", FromBase64Array(DEF_BUTTON_HOVER))
-'        ButtonImageArray(ucsBstPressed) = .ReadProperty("ButtonPressed", vbNullString)
-'        ButtonImageArray(ucsBstHoverPressed) = .ReadProperty("ButtonHoverPressed", vbNullString)
-'        ButtonImageArray(ucsBstFocused) = .ReadProperty("ButtonFocused", FromBase64Array(DEF_BUTTON_FOCUS))
-        Caption = .ReadProperty("Caption", Ambient.DisplayName)
+        Caption = .ReadProperty("Caption", vbNullString)
         Set Font = .ReadProperty("Font", Ambient.Font)
         ForeColor = .ReadProperty("ForeColor", DEF_FORECOLOR)
+        ManualFocus = .ReadProperty("ManualFocus", DEF_MANUALFOCUS)
+        MaskColor = .ReadProperty("MaskColor", DEF_MASKCOLOR)
     End With
     Exit Sub
 EH:
@@ -1661,9 +2048,11 @@ Private Sub UserControl_WriteProperties(PropBag As PropertyBag)
         .WriteProperty "Enabled", Enabled, DEF_ENABLED
         .WriteProperty "Opacity", Opacity, DEF_OPACITY
         .WriteProperty "AnimationDuration", AnimationDuration, DEF_ANIMATIONDURATION
-        .WriteProperty "Caption", Caption, Ambient.DisplayName
+        .WriteProperty "Caption", Caption, vbNullString
         .WriteProperty "Font", Font, Ambient.Font
         .WriteProperty "ForeColor", ForeColor, DEF_FORECOLOR
+        .WriteProperty "ManualFocus", ManualFocus, DEF_MANUALFOCUS
+        .WriteProperty "MaskColor", MaskColor, DEF_MASKCOLOR
     End With
     Exit Sub
 EH:
@@ -1672,19 +2061,34 @@ EH:
 End Sub
 
 Private Sub UserControl_Resize()
+    Const FUNC_NAME     As String = "UserControl_Resize"
+    
+    On Error GoTo EH
+    If m_hFocusBitmap <> 0 Then
+        Call GdipDisposeImage(m_hFocusBitmap)
+        m_hFocusBitmap = 0
+    End If
     Repaint
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
+
+'Private Sub UserControl_Show()
+'    m_bShown = True
+'End Sub
 
 Private Sub UserControl_Hide()
     m_bShown = False
 End Sub
 
 Private Sub UserControl_Initialize()
-    Dim uStartup        As GdiplusStartupInput
+    Dim aInput(0 To 3)  As Long
     
     If GetModuleHandle("gdiplus") = 0 Then
-        uStartup.GdiplusVersion = 1&
-        Call GdiplusStartup(0, uStartup)
+        aInput(0) = 1
+        Call GdiplusStartup(0, aInput(0))
     End If
     pvSetEmptyStyle
 End Sub
@@ -1717,6 +2121,14 @@ Private Sub UserControl_Terminate()
     If m_hFont <> 0 Then
         Call GdipDeleteFont(m_hFont)
         m_hFont = 0
+    End If
+    If m_hPictureBitmap <> 0 Then
+        Call GdipDisposeImage(m_hPictureBitmap)
+        m_hPictureBitmap = 0
+    End If
+    If m_hPictureAttributes <> 0 Then
+        Call GdipDisposeImageAttributes(m_hPictureAttributes)
+        m_hPictureAttributes = 0
     End If
     #If ImplHasTimers Then
         TerminateFireOnceTimer m_uTimer
