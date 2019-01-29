@@ -269,7 +269,7 @@ End Type
 '=========================================================================
 
 Private Const DBL_EPLISON           As Double = 0.000001
-Private Const DEF_STYLE             As Long = ucsBtyButtonDefault
+Private Const DEF_STYLE             As Long = ucsBtyNone
 Private Const DEF_ENABLED           As Boolean = True
 Private Const DEF_OPACITY           As Double = 1
 Private Const DEF_ANIMATIONDURATION As Double = 0
@@ -478,7 +478,7 @@ Private Function PrintError(sFunction As String) As VbMsgBoxResult
 #If ImplUseShared Then
     PopPrintError sFunction, MODULE_NAME, PushError
 #Else
-    Debug.Print "Critical error: " & Err.Description & " [" & MODULE_NAME & "." & sFunction & "]", Timer
+    Debug.Print "Critical error: " & Err.Description & " [" & STR_MODULE_NAME & "." & sFunction & "]", Timer
 #End If
 End Function
 
@@ -1237,6 +1237,7 @@ Private Function pvPrepareStringFormat(ByVal lFlags As UcsNineButtonTextFlagsEnu
     '--- success
     pvPrepareStringFormat = True
 QH:
+    On Error Resume Next
     If hNewFormat <> 0 Then
         Call GdipDeleteStringFormat(hNewFormat)
         hNewFormat = 0
@@ -1898,7 +1899,11 @@ Private Function pvMergeBitmap(ByVal hDstBitmap As Long, ByVal hSrcBitmap As Lon
     End With
     Call CopyMemory(ByVal ArrPtr(baSrc), VarPtr(uSrcArray), 4)
     For lIdx = 0 To UBound(baDst)
-        lG = (baDst(lIdx) * lDstAlpha + baSrc(lIdx) * lSrcAlpha) \ 255
+        If lIdx <= UBound(baSrc) Then
+            lG = (baDst(lIdx) * lDstAlpha + baSrc(lIdx) * lSrcAlpha) \ 255
+        Else
+            lG = baDst(lIdx)
+        End If
         If lG > 255 Then
             lG = 255
         ElseIf lG < 0 Then
@@ -2213,7 +2218,8 @@ Private Sub UserControl_Resize()
         Call GdipDisposeImage(m_hFocusBitmap)
         m_hFocusBitmap = 0
     End If
-    Repaint
+    m_bShown = False
+    Refresh
     Exit Sub
 EH:
     PrintError FUNC_NAME
