@@ -6,7 +6,10 @@ Begin VB.UserControl ctxNineButton
    ClientTop       =   0
    ClientWidth     =   4044
    ClipBehavior    =   0  'None
+   ClipControls    =   0   'False
    DefaultCancel   =   -1  'True
+   HasDC           =   0   'False
+   HitBehavior     =   0  'None
    KeyPreview      =   -1  'True
    ScaleHeight     =   105
    ScaleMode       =   3  'Pixel
@@ -48,6 +51,7 @@ Attribute KeyDown.VB_UserMemId = -602
 Event KeyPress(KeyAscii As Integer)
 Attribute KeyPress.VB_UserMemId = -604
 Event KeyUp(KeyCode As Integer, Shift As Integer)
+Event AccessKeyPress(KeyAscii As Integer)
 Event MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
 Attribute MouseDown.VB_UserMemId = -605
 Event MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
@@ -500,7 +504,7 @@ Property Let Style(ByVal eValue As UcsNineButtonStyleEnum)
     If m_eStyle <> eValue Then
         m_eStyle = eValue
         pvSetStyle eValue
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -525,7 +529,7 @@ End Property
 Property Let Opacity(ByVal sngValue As Single)
     If m_sngOpacity <> sngValue Then
         m_sngOpacity = sngValue
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -547,7 +551,7 @@ End Property
 Property Let Caption(sValue As String)
     If m_sCaption <> sValue Then
         m_sCaption = sValue
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -561,7 +565,7 @@ Property Set Font(oValue As StdFont)
     If Not m_oFont Is oValue Then
         Set m_oFont = oValue
         pvPrepareFont m_oFont, m_hFont
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -574,7 +578,7 @@ End Property
 Property Let ForeColor(ByVal clrValue As OLE_COLOR)
     If m_clrFore <> clrValue Then
         m_clrFore = clrValue
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -596,7 +600,7 @@ Property Set Picture(oValue As StdPicture)
     If Not m_oPicture Is oValue Then
         Set m_oPicture = oValue
         pvPreparePicture m_oPicture, m_clrMask, m_hPictureBitmap, m_hPictureAttributes
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -609,7 +613,7 @@ Property Let MaskColor(ByVal clrValue As OLE_COLOR)
     If m_clrMask <> clrValue Then
         m_clrMask = clrValue
         pvPreparePicture m_oPicture, m_clrMask, m_hPictureBitmap, m_hPictureAttributes
-        Repaint
+        pvRefresh
         PropertyChanged
     End If
 End Property
@@ -658,7 +662,7 @@ Property Let ButtonImageArray(Optional ByVal eState As UcsNineButtonStateEnum = 
     Else
         Set m_uButton(eState).ImagePatch = Nothing
     End If
-    Repaint
+    pvRefresh
 End Property
 
 Property Get ButtonImageBitmap(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Long
@@ -686,7 +690,7 @@ Property Let ButtonImageBitmap(Optional ByVal eState As UcsNineButtonStateEnum =
     Else
         Set m_uButton(eState).ImagePatch = Nothing
     End If
-    Repaint
+    pvRefresh
 End Property
 
 Property Get ButtonImageOpacity(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
@@ -702,7 +706,7 @@ Property Let ButtonImageOpacity(Optional ByVal eState As UcsNineButtonStateEnum 
     End If
     If m_uButton(eState).ImageOpacity <> sngValue Then
         m_uButton(eState).ImageOpacity = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -719,7 +723,7 @@ Property Set ButtonTextFont(Optional ByVal eState As UcsNineButtonStateEnum = -1
     End If
     If Not m_uButton(eState).TextFont Is oValue Then
         Set m_uButton(eState).TextFont = oValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -736,7 +740,7 @@ Property Let ButtonTextFlags(Optional ByVal eState As UcsNineButtonStateEnum = -
     End If
     If m_uButton(eState).TextFlags <> eValue Then
         m_uButton(eState).TextFlags = eValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -753,7 +757,7 @@ Property Let ButtonTextColor(Optional ByVal eState As UcsNineButtonStateEnum = -
     End If
     If m_uButton(eState).TextColor <> clrValue Then
         m_uButton(eState).TextColor = clrValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -770,7 +774,7 @@ Property Let ButtonTextOpacity(Optional ByVal eState As UcsNineButtonStateEnum =
     End If
     If m_uButton(eState).TextOpacity <> sngValue Then
         m_uButton(eState).TextOpacity = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -787,7 +791,7 @@ Property Let ButtonTextOffsetX(Optional ByVal eState As UcsNineButtonStateEnum =
     End If
     If m_uButton(eState).TextOffsetX <> sngValue Then
         m_uButton(eState).TextOffsetX = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -804,7 +808,7 @@ Property Let ButtonTextOffsetY(Optional ByVal eState As UcsNineButtonStateEnum =
     End If
     If m_uButton(eState).TextOffsetY <> sngValue Then
         m_uButton(eState).TextOffsetY = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -821,7 +825,7 @@ Property Let ButtonShadowColor(Optional ByVal eState As UcsNineButtonStateEnum =
     End If
     If m_uButton(eState).ShadowColor <> clrValue Then
         m_uButton(eState).ShadowColor = clrValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -838,7 +842,7 @@ Property Let ButtonShadowOpacity(Optional ByVal eState As UcsNineButtonStateEnum
     End If
     If m_uButton(eState).ShadowOpacity <> sngValue Then
         m_uButton(eState).ShadowOpacity = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -855,7 +859,7 @@ Property Let ButtonShadowOffsetX(Optional ByVal eState As UcsNineButtonStateEnum
     End If
     If m_uButton(eState).ShadowOffsetX <> sngValue Then
         m_uButton(eState).ShadowOffsetX = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -872,7 +876,7 @@ Property Let ButtonShadowOffsetY(Optional ByVal eState As UcsNineButtonStateEnum
     End If
     If m_uButton(eState).ShadowOffsetY <> sngValue Then
         m_uButton(eState).ShadowOffsetY = sngValue
-        Repaint
+        pvRefresh
     End If
 End Property
 
@@ -932,11 +936,26 @@ EH:
 End Sub
 
 Public Sub CancelMode()
+    Const FUNC_NAME     As String = "CancelMode"
+    
+    On Error GoTo EH
     pvState(ucsBstHoverPressed) = False
+    m_nDownButton = 0
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
 
 Friend Sub frTimer()
+    Const FUNC_NAME     As String = "frTimer"
+    
+    On Error GoTo EH
     pvAnimateState TimerEx - m_dblAnimationStart, m_sngAnimationOpacity1, m_sngAnimationOpacity2
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
 
 '== private ==============================================================
@@ -1764,6 +1783,7 @@ Private Sub pvSetCardStyle( _
     With m_uButton(ucsBstFocused)
         Set .ImagePatch = pvResExtract(hResBitmap, ucsIdxCardFocus, LNG_CARD_TOP, LNG_CARD_WIDTH, LNG_CARD_HEIGHT)
     End With
+    ForeColor = vbBlack
 End Sub
 
 Private Function pvResExtract( _
@@ -1871,6 +1891,8 @@ Private Function pvMergeBitmap(ByVal hDstBitmap As Long, ByVal hSrcBitmap As Lon
     Dim baDst()         As Byte
     Dim baSrc()         As Byte
     Dim lIdx            As Long
+    Dim lY              As Long
+    Dim lX              As Long
     Dim lG              As Long
 
     On Error GoTo EH
@@ -1899,17 +1921,19 @@ Private Function pvMergeBitmap(ByVal hDstBitmap As Long, ByVal hSrcBitmap As Lon
     End With
     Call CopyMemory(ByVal ArrPtr(baSrc), VarPtr(uSrcArray), 4)
     For lIdx = 0 To UBound(baDst)
-        If lIdx <= UBound(baSrc) Then
-            lG = (baDst(lIdx) * lDstAlpha + baSrc(lIdx) * lSrcAlpha) \ 255
-        Else
-            lG = baDst(lIdx)
+        lY = lIdx \ uDstData.Stride
+        If lY < uSrcData.Height Then
+            lX = lIdx - (lY * uDstData.Stride)
+            If lX < uSrcData.Stride Then
+                lG = (baDst(lIdx) * lDstAlpha + baSrc(lY * uSrcData.Stride + lX) * lSrcAlpha) \ 255
+                If lG > 255 Then
+                    lG = 255
+                ElseIf lG < 0 Then
+                    lG = 0
+                End If
+                baDst(lIdx) = lG
+            End If
         End If
-        If lG > 255 Then
-            lG = 255
-        ElseIf lG < 0 Then
-            lG = 0
-        End If
-        baDst(lIdx) = lG
     Next
     '--- success
     pvMergeBitmap = True
@@ -1926,6 +1950,11 @@ EH:
     PrintError FUNC_NAME
     Resume QH
 End Function
+
+Public Sub pvRefresh()
+    m_bShown = False
+    Refresh
+End Sub
 
 #If Not ImplUseShared Then
 Private Property Get TimerEx() As Double
@@ -1956,6 +1985,10 @@ End Function
 Private Function HM2Pix(ByVal Value As Double) As Long
    HM2Pix = Int(Value * 1440 / 2540 / Screen.TwipsPerPixelX + 0.5)
 End Function
+
+Private Function AlignTwipsToPix(ByVal sngTwips As Single) As Single
+    AlignTwipsToPix = Int(sngTwips / Screen.TwipsPerPixelX + 0.5) * Screen.TwipsPerPixelX
+End Function
 #End If
 
 '=========================================================================
@@ -1964,7 +1997,7 @@ End Function
 
 Private Sub m_oFont_FontChanged(ByVal PropertyName As String)
     pvPrepareFont m_oFont, m_hFont
-    Repaint
+    pvRefresh
     PropertyChanged
 End Sub
 
@@ -1989,7 +2022,7 @@ Private Sub UserControl_KeyPress(KeyAscii As Integer)
 End Sub
 
 Private Sub UserControl_AccessKeyPress(KeyAscii As Integer)
-    RaiseEvent KeyPress(KeyAscii)
+    RaiseEvent AccessKeyPress(KeyAscii)
     If KeyAscii <> 0 Then
         pvHandleClick
         KeyAscii = 0
@@ -2001,7 +2034,9 @@ Private Sub UserControl_KeyUp(KeyCode As Integer, Shift As Integer)
 End Sub
 
 Private Sub UserControl_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    RaiseEvent MouseDown(Button, Shift, X, Y)
+    RaiseEvent MouseDown(Button, Shift, _
+        AlignTwipsToPix(ScaleX(X, ScaleMode, vbContainerPosition)), _
+        AlignTwipsToPix(ScaleY(Y, ScaleMode, vbContainerPosition)))
     pvHandleMouseDown Button, Shift, X, Y
 End Sub
 
@@ -2009,18 +2044,23 @@ Private Sub UserControl_MouseMove(Button As Integer, Shift As Integer, X As Sing
     Const FUNC_NAME     As String = "UserControl_MouseMove"
     
     On Error GoTo EH
-    RaiseEvent MouseMove(Button, Shift, X, Y)
+    RaiseEvent MouseMove(Button, Shift, _
+        AlignTwipsToPix(ScaleX(X, ScaleMode, vbContainerPosition)), _
+        AlignTwipsToPix(ScaleY(Y, ScaleMode, vbContainerPosition)))
+    If Button = -1 Then
+        GoTo QH
+    End If
     If X >= 0 And X < ScaleWidth And Y >= 0 And Y < ScaleHeight Then
         If Not pvState(ucsBstHover) Then
             If pvParentRegisterCancelMode(Me) Then
                 pvState(ucsBstHover) = True
             End If
         End If
+        pvState(ucsBstPressed) = (Button And vbLeftButton) <> 0
     Else
-        If pvState(ucsBstHover) Then
-            pvState(ucsBstHover) = False
-        End If
+        pvState(ucsBstPressed) = False
     End If
+QH:
     Exit Sub
 EH:
     PrintError FUNC_NAME
@@ -2031,19 +2071,26 @@ Private Sub UserControl_MouseUp(Button As Integer, Shift As Integer, X As Single
     Const FUNC_NAME     As String = "UserControl_MouseUp"
     
     On Error GoTo EH
-    RaiseEvent MouseUp(Button, Shift, X, Y)
+    RaiseEvent MouseUp(Button, Shift, _
+        AlignTwipsToPix(ScaleX(X, ScaleMode, vbContainerPosition)), _
+        AlignTwipsToPix(ScaleY(Y, ScaleMode, vbContainerPosition)))
+    If Button = -1 Then
+        GoTo QH
+    End If
     If (Button And vbLeftButton) <> 0 Then
         pvState(ucsBstPressed) = False
     End If
-    If X >= 0 And X < ScaleWidth And Y >= 0 And Y < ScaleHeight Then
-        Call ApiUpdateWindow(ContainerHwnd) '--- pump WM_PAINT
+    If Button <> 0 And X >= 0 And X < ScaleWidth And Y >= 0 And Y < ScaleHeight Then
         If (m_nDownButton And Button And vbLeftButton) <> 0 Then
             RaiseEvent Click
         ElseIf (m_nDownButton And Button And vbRightButton) <> 0 Then
             RaiseEvent ContextMenu
         End If
+    Else
+        pvState(ucsBstHover) = False
     End If
     m_nDownButton = 0
+QH:
     Exit Sub
 EH:
     PrintError FUNC_NAME
@@ -2218,20 +2265,28 @@ Private Sub UserControl_Resize()
         Call GdipDisposeImage(m_hFocusBitmap)
         m_hFocusBitmap = 0
     End If
-    m_bShown = False
-    Refresh
+    pvRefresh
     Exit Sub
 EH:
     PrintError FUNC_NAME
     Resume Next
 End Sub
 
-'Private Sub UserControl_Show()
-'    m_bShown = True
-'End Sub
-
 Private Sub UserControl_Hide()
+    Const FUNC_NAME     As String = "UserControl_Hide"
+    
+    On Error GoTo EH
     m_bShown = False
+    If m_hPrevBitmap <> 0 Then
+        Call GdipDisposeImage(m_hPrevBitmap)
+        m_hPrevBitmap = 0
+    End If
+    CancelMode
+    TerminateFireOnceTimer m_uTimer
+    Exit Sub
+EH:
+    PrintError FUNC_NAME
+    Resume Next
 End Sub
 
 '=========================================================================
