@@ -23,7 +23,7 @@ Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 '=========================================================================
 '
-' Nine Patch PNGs for VB6 (c) 2018-2019 by wqweto@gmail.com
+' Nine Patch PNGs for VB6 (c) 2018-2022 by wqweto@gmail.com
 '
 ' ctxNineButton.ctl -- windowless 9-patch button control w/ state animation
 '
@@ -59,6 +59,12 @@ Event MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
 Attribute MouseMove.VB_UserMemId = -606
 Event MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
 Attribute MouseUp.VB_UserMemId = -607
+Event OLECompleteDrag(Effect As Long)
+Event OLEDragDrop(Data As Object, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+Event OLEDragOver(Data As Object, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single, State As Integer)
+Event OLEGiveFeedback(Effect As Long, DefaultCursors As Boolean)
+Event OLESetData(Data As Object, DataFormat As Integer)
+Event OLEStartDrag(Data As Object, AllowedEffects As Long)
 
 '=========================================================================
 ' Public enums
@@ -126,6 +132,11 @@ Public Enum UcsNineButtonStyleEnum
     ucsBtyCardFocus
 End Enum
 
+Public Enum UcsNineButtonOleDropMode
+    ucsModNone
+    ucsModManual
+End Enum
+
 '=========================================================================
 ' API
 '=========================================================================
@@ -144,6 +155,9 @@ Private Const DIB_RGB_COLORS                As Long = 0 '  color table in RGBs
 '--- for GdipBitmapLockBits
 Private Const ImageLockModeRead             As Long = &H1
 Private Const ImageLockModeWrite            As Long = &H2
+'--- for matrix order
+'Private Const MatrixOrderPrepend            As Long = 0
+Private Const MatrixOrderAppend             As Long = 1
 '--- for thunks
 Private Const MEM_COMMIT                    As Long = &H1000
 Private Const PAGE_EXECUTE_READWRITE        As Long = &H40
@@ -164,6 +178,7 @@ Private Declare Function ApiUpdateWindow Lib "user32" Alias "UpdateWindow" (ByVa
 Private Declare Function GetEnvironmentVariable Lib "kernel32" Alias "GetEnvironmentVariableA" (ByVal lpName As String, ByVal lpBuffer As String, ByVal nSize As Long) As Long
 Private Declare Function SetEnvironmentVariable Lib "kernel32" Alias "SetEnvironmentVariableA" (ByVal lpName As String, ByVal lpValue As String) As Long
 Private Declare Function AlphaBlend Lib "msimg32" (ByVal hDestDC As Long, ByVal lX As Long, ByVal lY As Long, ByVal nWidth As Long, ByVal nHeight As Long, ByVal hSrcDC As Long, ByVal xSrc As Long, ByVal ySrc As Long, ByVal widthSrc As Long, ByVal heightSrc As Long, ByVal blendFunct As Long) As Boolean
+Private Declare Function GetCurrentProcessId Lib "kernel32" () As Long
 '--- gdi+
 Private Declare Function GdiplusStartup Lib "gdiplus" (hToken As Long, pInputBuf As Any, Optional ByVal pOutputBuf As Long = 0) As Long
 Private Declare Function GdipCreateBitmapFromScan0 Lib "gdiplus" (ByVal lWidth As Long, ByVal lHeight As Long, ByVal lStride As Long, ByVal lPixelFormat As Long, ByVal Scan0 As Long, hBitmap As Long) As Long
@@ -198,10 +213,11 @@ Private Declare Function GdipGetImageDimension Lib "gdiplus" (ByVal Image As Lon
 Private Declare Function GdipCloneImage Lib "gdiplus" (ByVal hImage As Long, hCloneImage As Long) As Long
 Private Declare Function GdipBitmapLockBits Lib "gdiplus" (ByVal hBitmap As Long, lpRect As Any, ByVal lFlags As Long, ByVal lPixelFormat As Long, uLockedBitmapData As BitmapData) As Long
 Private Declare Function GdipBitmapUnlockBits Lib "gdiplus" (ByVal hBitmap As Long, uLockedBitmapData As BitmapData) As Long
+Private Declare Function GdipTranslateWorldTransform Lib "gdiplus" (ByVal hGraphics As Long, ByVal nDx As Single, ByVal nDy As Single, ByVal lOrder As Long) As Long
+Private Declare Function GdipScaleWorldTransform Lib "gdiplus" (ByVal hGraphics As Long, ByVal nSx As Single, ByVal nSy As Single, ByVal lOrder As Long) As Long
 #If Not ImplNoIdeProtection Then
     Private Declare Function FindWindowEx Lib "user32" Alias "FindWindowExA" (ByVal hWndParent As Long, ByVal hWndChildAfter As Long, ByVal lpszClass As String, ByVal lpszWindow As String) As Long
     Private Declare Function GetWindowThreadProcessId Lib "user32" (ByVal hWnd As Long, lpdwProcessId As Long) As Long
-    Private Declare Function GetCurrentProcessId Lib "kernel32" () As Long
 #End If
 #If Not ImplUseShared Then
     Private Declare Function QueryPerformanceCounter Lib "kernel32" (lpPerformanceCount As Currency) As Long
@@ -301,6 +317,7 @@ Private Const DEF_TEXTOPACITY       As Single = 1
 Private Const DEF_TEXTCOLOR         As Long = -1  '--- none
 Private Const DEF_TEXTFLAGS         As Long = ucsBflCenter
 Private Const DEF_IMAGEOPACITY      As Single = 1
+Private Const DEF_IMAGEZOOM         As Single = 1
 Private Const DEF_SHADOWOPACITY     As Single = 0.5
 Private Const DEF_SHADOWCOLOR       As Long = vbButtonShadow
 Private Const STR_RES_PNG1          As String = "iVBORw0KGgoAAAANSUhEUgAAAOcAAACfCAYAAAAChc6MAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAZdEVYdFNvZnR3YXJlAHBhaW50Lm5ldCA0LjAuMjHxIGmVAAA3S0lEQVR4Xu2dCXwUVbr2vYx8cxf93fEOKkoWliRAAggkgWyQgCDigsjijsvoeBUUt1mU63cNGFlUYARDQEEUgglLQHABdCSQIAgJRBwhCZpOoqDIruNEEubjfO9T3ZWcnH4rpyrpADFVv98/TZ33eZ9uu/N4qrtOVy4QQtiCNrrha43F9eRrjcX15GuN5Vx7en8EcFPvwEVc8OCCwrZ3pO0OHTtld/yY5wtSVDCOOnRcv0vLZMGCBW1ffnVh6Euz58dPm52RooJx1KHj+r0/Aripd9CaSRWizS1TihJvmbJr0pjJBak6oLstrSgBfZyfS4uhzYuzMxKnz5o3" & _
@@ -399,6 +416,7 @@ Private Type UcsNineButtonStateType
     ImageArray()        As Byte
     ImagePatch          As cNinePatch
     ImageOpacity        As Single
+    ImageZoom           As Single
     TextFont            As StdFont
     TextFlags           As UcsNineButtonTextFlagsEnum
     TextColor           As OLE_COLOR
@@ -658,6 +676,15 @@ Property Let ButtonState(ByVal eState As UcsNineButtonStateEnum)
     PropertyChanged
 End Property
 
+Property Get OLEDropMode() As UcsNineButtonOleDropMode
+    OLEDropMode = UserControl.OLEDropMode
+End Property
+
+Property Let OLEDropMode(ByVal eValue As UcsNineButtonOleDropMode)
+    UserControl.OLEDropMode = eValue
+    PropertyChanged
+End Property
+
 '== run-time =============================================================
 
 Property Get Value() As Boolean
@@ -736,6 +763,23 @@ Property Let ButtonImageOpacity(Optional ByVal eState As UcsNineButtonStateEnum 
     End If
     If m_uButton(eState).ImageOpacity <> sngValue Then
         m_uButton(eState).ImageOpacity = sngValue
+        pvRefresh
+    End If
+End Property
+
+Property Get ButtonImageZoom(Optional ByVal eState As UcsNineButtonStateEnum = -1) As Single
+    If eState < 0 Then
+        eState = m_eState
+    End If
+    ButtonImageZoom = m_uButton(eState).ImageZoom
+End Property
+
+Property Let ButtonImageZoom(Optional ByVal eState As UcsNineButtonStateEnum = -1, ByVal sngValue As Single)
+    If eState < 0 Then
+        eState = m_eState
+    End If
+    If m_uButton(eState).ImageZoom <> sngValue Then
+        m_uButton(eState).ImageZoom = sngValue
         pvRefresh
     End If
 End Property
@@ -1066,7 +1110,7 @@ Private Function pvPrepareBitmap(ByVal eState As UcsNineButtonStateEnum, hFocusB
     Dim sCaption        As String
     
     On Error GoTo EH
-    If (eState And ucsBstFocused) <> 0 And (eState And ucsBstHoverPressed) <> ucsBstHoverPressed Then
+    If (eState And ucsBstFocused) <> 0 And ((eState And ucsBstHoverPressed) <> ucsBstHoverPressed Or m_bManualFocus) Then
         If hFocusBitmap = 0 Then
             With m_uButton(ucsBstFocused)
                 If Not .ImagePatch Is Nothing Then
@@ -1103,6 +1147,17 @@ Private Function pvPrepareBitmap(ByVal eState As UcsNineButtonStateEnum, hFocusB
         End If
         If GdipSetTextRenderingHint(hGraphics, TextRenderingHintClearTypeGridFit) <> 0 Then
             GoTo QH
+        End If
+        If .ImageZoom <> 1 Then
+            If GdipTranslateWorldTransform(hGraphics, -ScaleWidth / 2, -ScaleHeight / 2, MatrixOrderAppend) <> 0 Then
+                GoTo QH
+            End If
+            If GdipScaleWorldTransform(hGraphics, .ImageZoom, .ImageZoom, MatrixOrderAppend) <> 0 Then
+                GoTo QH
+            End If
+            If GdipTranslateWorldTransform(hGraphics, ScaleWidth / 2, ScaleHeight / 2, MatrixOrderAppend) <> 0 Then
+                GoTo QH
+            End If
         End If
         If Not .ImagePatch Is Nothing Then
             If Not .ImagePatch.DrawToGraphics(hGraphics, 0, 0, ScaleWidth, ScaleHeight) Then
@@ -1608,12 +1663,12 @@ Private Property Get pvNppGlobalData(sKey As String) As Long
     Dim sBuffer     As String
     
     sBuffer = String$(50, 0)
-    Call GetEnvironmentVariable("_NPP_GLOBAL" & App.hInstance & "_" & sKey, sBuffer, Len(sBuffer) - 1)
+    Call GetEnvironmentVariable("_NPP_GLOBAL" & GetCurrentProcessId() & "_" & sKey, sBuffer, Len(sBuffer) - 1)
     pvNppGlobalData = Val(Left$(sBuffer, InStr(sBuffer, vbNullChar) - 1))
 End Property
 
 Private Property Let pvNppGlobalData(sKey As String, ByVal lValue As Long)
-    Call SetEnvironmentVariable("_NPP_GLOBAL" & App.hInstance & "_" & sKey, lValue)
+    Call SetEnvironmentVariable("_NPP_GLOBAL" & GetCurrentProcessId() & "_" & sKey, lValue)
 End Property
 
 Private Sub pvSetStyle(ByVal eStyle As UcsNineButtonStyleEnum)
@@ -1921,6 +1976,7 @@ Private Sub pvSetEmptyStyle()
 
     With uEmpty
         .ImageOpacity = DEF_IMAGEOPACITY
+        .ImageZoom = DEF_IMAGEZOOM
         .TextOpacity = DEF_TEXTOPACITY
         .TextColor = DEF_TEXTCOLOR
         .TextFlags = DEF_TEXTFLAGS
@@ -2089,11 +2145,9 @@ Private Function pvPaintControl(ByVal hDC As Long) As Boolean
         If GdipDrawImageRectRect(hGraphics, IIf(hMergeBitmap <> 0, hMergeBitmap, m_hBitmap), 0, 0, ScaleWidth, ScaleHeight, 0, 0, ScaleWidth, ScaleHeight, , m_hAttributes) <> 0 Then
             GoTo QH
         End If
-    Else
-        Line (0, 0)-(ScaleWidth - 1, ScaleHeight - 1), &HE0FFFF, BF
+        '--- success
+        pvPaintControl = True
     End If
-    '--- success
-    pvPaintControl = True
 QH:
     On Error Resume Next
     If hGraphics <> 0 Then
@@ -2258,12 +2312,12 @@ Private Property Get pvThunkGlobalData(sKey As String) As Long
     Dim sBuffer     As String
     
     sBuffer = String$(50, 0)
-    Call GetEnvironmentVariable("_MST_GLOBAL" & App.hInstance & "_" & sKey, sBuffer, Len(sBuffer) - 1)
+    Call GetEnvironmentVariable("_MST_GLOBAL" & GetCurrentProcessId() & "_" & sKey, sBuffer, Len(sBuffer) - 1)
     pvThunkGlobalData = Val(Left$(sBuffer, InStr(sBuffer, vbNullChar) - 1))
 End Property
 
 Private Property Let pvThunkGlobalData(sKey As String, ByVal lValue As Long)
-    Call SetEnvironmentVariable("_MST_GLOBAL" & App.hInstance & "_" & sKey, lValue)
+    Call SetEnvironmentVariable("_MST_GLOBAL" & GetCurrentProcessId() & "_" & sKey, lValue)
 End Property
 #End If
 
@@ -2383,6 +2437,7 @@ Private Sub UserControl_Paint()
     Const FUNC_NAME     As String = "UserControl_Paint"
     Const AC_SRC_ALPHA  As Long = 1
     Const Opacity       As Long = &HFF
+    Const CLR_YELLOW    As Long = &HE0FFFF
     Dim hMemDC          As Long
     Dim hPrevDib        As Long
     
@@ -2390,22 +2445,37 @@ Private Sub UserControl_Paint()
     If AutoRedraw Then
         hMemDC = CreateCompatibleDC(hDC)
         If hMemDC = 0 Then
-            GoTo QH
+            GoTo DefPaint
         End If
         If m_hRedrawDib = 0 Then
             If Not pvCreateDib(hMemDC, ScaleWidth, ScaleHeight, m_hRedrawDib) Then
-                GoTo QH
+                GoTo DefPaint
             End If
             hPrevDib = SelectObject(hMemDC, m_hRedrawDib)
             If Not pvPaintControl(hMemDC) Then
-                GoTo QH
+                GoTo DefPaint
             End If
         Else
             hPrevDib = SelectObject(hMemDC, m_hRedrawDib)
         End If
-        Call AlphaBlend(hDC, 0, 0, ScaleWidth, ScaleHeight, hMemDC, 0, 0, ScaleWidth, ScaleHeight, AC_SRC_ALPHA * &H1000000 + Opacity * &H10000)
+        If AlphaBlend(hDC, 0, 0, ScaleWidth, ScaleHeight, hMemDC, 0, 0, ScaleWidth, ScaleHeight, AC_SRC_ALPHA * &H1000000 + Opacity * &H10000) = 0 Then
+            GoTo DefPaint
+        End If
     Else
-        pvPaintControl hDC
+        If Not pvPaintControl(hDC) Then
+            GoTo DefPaint
+        End If
+    End If
+    If False Then
+DefPaint:
+        If m_hRedrawDib <> 0 Then
+            '--- note: before deleting DIB try de-selecting from dc
+            Call SelectObject(hMemDC, hPrevDib)
+            Call DeleteObject(m_hRedrawDib)
+            m_hRedrawDib = 0
+        End If
+        Line (0, 0)-(ScaleWidth - 1, ScaleHeight - 1), CLR_YELLOW, BF
+        Line (2, 2)-(ScaleWidth - 3, ScaleHeight - 3), vbButtonShadow, B
     End If
 QH:
     On Error Resume Next
@@ -2444,6 +2514,30 @@ Private Sub UserControl_ExitFocus()
 EH:
     PrintError FUNC_NAME
     Resume Next
+End Sub
+
+Private Sub UserControl_OLECompleteDrag(Effect As Long)
+    RaiseEvent OLECompleteDrag(Effect)
+End Sub
+
+Private Sub UserControl_OLEDragDrop(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single)
+    RaiseEvent OLEDragDrop(Data, Effect, Button, Shift, X, Y)
+End Sub
+
+Private Sub UserControl_OLEDragOver(Data As DataObject, Effect As Long, Button As Integer, Shift As Integer, X As Single, Y As Single, State As Integer)
+    RaiseEvent OLEDragOver(Data, Effect, Button, Shift, X, Y, State)
+End Sub
+
+Private Sub UserControl_OLEGiveFeedback(Effect As Long, DefaultCursors As Boolean)
+    RaiseEvent OLEGiveFeedback(Effect, DefaultCursors)
+End Sub
+
+Private Sub UserControl_OLESetData(Data As DataObject, DataFormat As Integer)
+    RaiseEvent OLESetData(Data, DataFormat)
+End Sub
+
+Private Sub UserControl_OLEStartDrag(Data As DataObject, AllowedEffects As Long)
+    RaiseEvent OLEStartDrag(Data, AllowedEffects)
 End Sub
 
 Private Sub UserControl_InitProperties()
